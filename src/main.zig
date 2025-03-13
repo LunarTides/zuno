@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const Color = enum(u7) {
     none = 0b0000000,
@@ -46,6 +47,7 @@ const Player = struct {
 };
 
 const Card = struct {
+    /// The first 3 bits signify the color, the last 4 signify the symbol.
     bitmask: u7,
 
     fn init(bitmask: u7) Card {
@@ -68,6 +70,7 @@ const Card = struct {
         var color: Color = rng.enumValue(Color);
         const symbol: Symbol = rng.enumValue(Symbol);
 
+        // Make sure the card has a color if the symbol requires it.
         if (!is_symbol_colorless(symbol)) {
             while (color == Color.none) {
                 color = rng.enumValue(Color);
@@ -123,19 +126,30 @@ const Card = struct {
     }
 };
 
-pub fn main() !void {
-    var debug_allocator = std.heap.DebugAllocator(.{}){};
-    // defer debug_allocator.deinit();
-    const gpa = debug_allocator.allocator();
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
+pub fn main() !void {
+    // Setup memory allocator.
+    var gpa, const is_debug = gpa: {
+        if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
+        break :gpa switch (builtin.mode) {
+            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
+        };
+    };
+    defer _ = if (is_debug) debug_allocator.deinit();
+
+    // Setup rng.
     const raw_seed: u128 = @bitCast(std.time.nanoTimestamp());
     const seed: u64 = @truncate(raw_seed);
     var random_number_generator = std.Random.DefaultPrng.init(seed);
     const rng = random_number_generator.random();
 
+    // Setup stdout.
     const stdout = std.io.getStdOut().writer();
     try stdout.print("Here are (3) randomly generated cards:\n", .{});
 
+    // Setup players.
     var player1 = Player.init(&gpa);
     defer player1.deinit();
 
@@ -146,7 +160,11 @@ pub fn main() !void {
     try player1.draw_card(&rng);
     try player1.draw_card(&rng);
 
+    // Print player's hand.
     for (player1.hand.items) |card| {
-        try stdout.print("{s}\n", .{try card.name(&gpa)});
+        const name = try card.name(&gpa);
+        defer gpa.free(name);
+
+        try stdout.print("{s}\n", .{name});
     }
 }
