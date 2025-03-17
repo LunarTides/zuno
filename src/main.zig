@@ -126,7 +126,17 @@ const Card = struct {
     }
 };
 
+var running = true;
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+
+fn input(stdin: anytype) ![]const u8 {
+    var buf: [4096]u8 = undefined;
+    if (try stdin.readUntilDelimiterOrEof(&buf, '\n')) |user_input| {
+        return user_input;
+    }
+
+    return "";
+}
 
 pub fn main() !void {
     // Setup memory allocator.
@@ -149,6 +159,8 @@ pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     try stdout.print("Here are (3) randomly generated cards:\n", .{});
 
+    const stdin = std.io.getStdIn().reader();
+
     // Setup players.
     var player1 = Player.init(&gpa);
     defer player1.deinit();
@@ -160,11 +172,27 @@ pub fn main() !void {
     try player1.draw_card(&rng);
     try player1.draw_card(&rng);
 
-    // Print player's hand.
-    for (player1.hand.items) |card| {
-        const name = try card.name(&gpa);
-        defer gpa.free(name);
+    while (running) {
+        // Clear screen.
+        try stdout.print("\x1b[2J\x1b[H", .{});
 
-        try stdout.print("{s}\n", .{name});
+        // Print player's hand.
+        for (player1.hand.items) |card| {
+            const name = try card.name(&gpa);
+            defer gpa.free(name);
+
+            try stdout.print("{s}\n", .{name});
+        }
+
+        try stdout.print("\nWhich card would you like to play? (type 'exit' to exit) ", .{});
+
+        const raw_user = try input(&stdin);
+
+        // Remove the newline.
+        const user = raw_user[0 .. raw_user.len - 1];
+
+        if (std.ascii.eqlIgnoreCase(user, "exit")) {
+            running = false;
+        }
     }
 }
