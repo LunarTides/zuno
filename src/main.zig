@@ -25,6 +25,10 @@ const Symbol = enum(u7) {
     plus_two = 0b0001100,
     wildcard = 0b0001101,
     plus_four = 0b0001110,
+
+    inline fn isColorless(symbol: Symbol) bool {
+        return symbol == .wildcard or symbol == .plus_four;
+    }
 };
 
 const Player = struct {
@@ -40,7 +44,7 @@ const Player = struct {
         self.hand.deinit();
     }
 
-    fn draw_card(self: *Player, rng: *const std.Random) !void {
+    fn drawCard(self: *Player, rng: *const std.Random) !void {
         const card = Card.random(rng);
         try self.hand.append(card);
     }
@@ -51,10 +55,10 @@ const Card = struct {
     bitmask: u7,
 
     fn init(bitmask: u7) Card {
-        var color = get_color_from_bitmask(bitmask);
-        const symbol = get_symbol_from_bitmask(bitmask);
+        var color = colorFromBitmask(bitmask);
+        const symbol = symbolFromBitmask(bitmask);
 
-        if (is_symbol_colorless(symbol)) {
+        if (Symbol.isColorless(symbol)) {
             color = Color.none;
         } else if (color == Color.none) {
             // Default to red. This should be handled correctly in other functions.
@@ -62,7 +66,7 @@ const Card = struct {
         }
 
         return Card{
-            .bitmask = create_bitmask(color, symbol),
+            .bitmask = createBitmask(color, symbol),
         };
     }
 
@@ -71,17 +75,17 @@ const Card = struct {
         const symbol: Symbol = rng.enumValue(Symbol);
 
         // Make sure the card has a color if the symbol requires it.
-        if (!is_symbol_colorless(symbol)) {
+        if (!Symbol.isColorless(symbol)) {
             while (color == Color.none) {
                 color = rng.enumValue(Color);
             }
         }
 
-        return init(create_bitmask(color, symbol));
+        return init(createBitmask(color, symbol));
     }
 
     fn name(self: Card, gpa: *const std.mem.Allocator) ![]u8 {
-        const color = switch (get_color_from_bitmask(self.bitmask)) {
+        const color = switch (colorFromBitmask(self.bitmask)) {
             Color.none => "",
             Color.red => "Red ",
             Color.green => "Green ",
@@ -89,7 +93,7 @@ const Card = struct {
             Color.yellow => "Yellow ",
         };
 
-        const symbol = switch (get_symbol_from_bitmask(self.bitmask)) {
+        const symbol = switch (symbolFromBitmask(self.bitmask)) {
             Symbol.one => "1",
             Symbol.two => "2",
             Symbol.three => "3",
@@ -109,19 +113,15 @@ const Card = struct {
         return try std.fmt.allocPrint(gpa.*, "{s}{s}", .{ color, symbol });
     }
 
-    inline fn is_symbol_colorless(symbol: Symbol) bool {
-        return symbol == Symbol.wildcard or symbol == Symbol.plus_four;
-    }
-
-    inline fn get_color_from_bitmask(bitmask: u7) Color {
+    inline fn colorFromBitmask(bitmask: u7) Color {
         return @enumFromInt(bitmask & 0b1110000);
     }
 
-    inline fn get_symbol_from_bitmask(bitmask: u7) Symbol {
+    inline fn symbolFromBitmask(bitmask: u7) Symbol {
         return @enumFromInt(bitmask & 0b0001111);
     }
 
-    inline fn create_bitmask(color: Color, symbol: Symbol) u7 {
+    inline fn createBitmask(color: Color, symbol: Symbol) u7 {
         return @intFromEnum(color) | @intFromEnum(symbol);
     }
 };
@@ -168,9 +168,9 @@ pub fn main() !void {
     // var player2 = Player.init(gpa);
     // defer player2.deinit();
 
-    try player1.draw_card(&rng);
-    try player1.draw_card(&rng);
-    try player1.draw_card(&rng);
+    try player1.drawCard(&rng);
+    try player1.drawCard(&rng);
+    try player1.drawCard(&rng);
 
     while (running) {
         // Clear screen.
